@@ -39,10 +39,12 @@
 
   const formApi = formContext?.formApi; // Gets the formApi from the formContext. We use it to register our field.
 
-  //Registering our field. We make sure this is derived so that the field is reregistered when any of the variables of the component changes. For instance, if in the Budibase builder the user changes a field to disabled, we want to reregister the field with the formApi so that it is disabled.
-  let formField = $derived(
-    formApi?.registerField(field, "text", "", disabled, validation, formStep)
-  );
+  //Registering our field. We make sure this reruns in an effect so that the field is reregistered when any of the variables of the component changes. For instance, if in the Budibase builder the user changes a field to disabled, we want to reregister the field with the formApi so that it is disabled.
+  //This must be an $effect (not $derived) because registerField mutates formApi's own internal state - a side effect that Svelte 5 forbids inside a derived's pure-computation phase (throws state_unsafe_mutation otherwise).
+  let formField = $state();
+  $effect(() => {
+    formField = formApi?.registerField(field, "text", "", disabled, validation, formStep);
+  });
 
   // After registering the field, we can subscribe to get fieldState, fieldApi, and fieldSchema from the formField. We use these to update the value of the field.
   let fieldApi = $state();
