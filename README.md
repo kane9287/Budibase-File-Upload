@@ -1,4 +1,4 @@
-# Budibase File Upload Tool
+# Budibase File Upload Tool Updated
 ## About
 This component is used for adding file fields inside of forms. It stores data inside a text value (JSON serialized), so it sould work with any text-based database column. This should work with both the Budibase DB and any other external SQL or noSQL DBs as all the files are fully serialized into text. This is useful if you wish to circumvent the default attachment field of Budibase, which stores data in MiniIO, and you instead want to store data directly inside your database. As files can have a lot of data within them, do note that some of the generated text fields can be quite long.
 
