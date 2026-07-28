@@ -11,16 +11,18 @@
   import { getContext, onDestroy, onMount } from "svelte";
 
   //Get the variables we have registered for our component in the Budibase builder (with the schema).
-  export let field; //The form field we are targeting.
-  export let label; //The label of the form field.
-  export let maxSize; //The maximum size of a file that can be uploaded.
-  export let maxFiles; //The maximum number of files that can be uploaded.
-  export let acceptedFiles; //The file types that can be uploaded. (As a comma separated string)
-  export let encodingProtection; //Whether to add a period to the start and end of the JSON string to work around a Budibase bug (https://github.com/Budibase/budibase/issues/8826) that removes brackets from the beginning and end of text.
-  export let useBlobURL; //Whether to use blob URLs instead of data URLs. Data URLs are opened in an iFrame, which can be blocked based on CSP settings. Thus, blob URLs are recommended.
-  export let disabled = false; //Whether the field is disabled.
-  export let onChange; //A function that is called when the value of the field changes. We use this to allow the user to add custom on change functionality in the Budibase builder.
-  export let validation; //The validation rules for the field. We don't need to deal with this, we just need to pass it to the formApi, which does the validation.
+  let {
+    field, //The form field we are targeting.
+    label, //The label of the form field.
+    maxSize, //The maximum size of a file that can be uploaded.
+    maxFiles, //The maximum number of files that can be uploaded.
+    acceptedFiles, //The file types that can be uploaded. (As a comma separated string)
+    encodingProtection, //Whether to add a period to the start and end of the JSON string to work around a Budibase bug (https://github.com/Budibase/budibase/issues/8826) that removes brackets from the beginning and end of text.
+    useBlobURL, //Whether to use blob URLs instead of data URLs. Data URLs are opened in an iFrame, which can be blocked based on CSP settings. Thus, blob URLs are recommended.
+    disabled = false, //Whether the field is disabled.
+    onChange, //A function that is called when the value of the field changes. We use this to allow the user to add custom on change functionality in the Budibase builder.
+    validation, //The validation rules for the field. We don't need to deal with this, we just need to pass it to the formApi, which does the validation.
+  } = $props();
 
   //Getting budibase API
   const { styleable } = getContext("sdk"); //Gets the styleable function from the Budibase API. This function is used to add Budibase styling to the component.
@@ -31,51 +33,50 @@
   const { notificationStore } = getContext("sdk"); //Gets the notificationStore object from the Budibase API. We use it to display warnings.
 
   // Budibase forms can be split into multiple steps. This is used to get the step number of the form we are in. If none are available we default to 1.
-  $: formStep = formStepContext ? $formStepContext || 1 : 1; // Checks if formStepContext (a Svelte store) exists. If it does, we take the value in the store (or 1 if the value in the store is falsy). If formStepContext does not exists, we also take 1.
+  let formStep = $derived(formStepContext ? $formStepContext || 1 : 1); // Checks if formStepContext (a Svelte store) exists. If it does, we take the value in the store (or 1 if the value in the store is falsy). If formStepContext does not exists, we also take 1.
 
   const labelPos = fieldGroupContext?.labelPosition || "above"; // Gets the label position from the fieldGroupContext. We use it to set the label position later in the HTML template.
 
   const formApi = formContext?.formApi; // Gets the formApi from the formContext. We use it to register our field.
 
-  //Registering our field. We make sure this is reactive so that the field is reregistered when any of the variables of the component changes. For instance, if in the Budibase builder the user changes a field to disabled, we want to reregister the field with the formApi so that it is disabled.
-  $: formField = formApi?.registerField(
-    field,
-    "text",
-    "",
-    disabled,
-    validation,
-    formStep
+  //Registering our field. We make sure this is derived so that the field is reregistered when any of the variables of the component changes. For instance, if in the Budibase builder the user changes a field to disabled, we want to reregister the field with the formApi so that it is disabled.
+  let formField = $derived(
+    formApi?.registerField(field, "text", "", disabled, validation, formStep)
   );
 
   // After registering the field, we can subscribe to get fieldState, fieldApi, and fieldSchema from the formField. We use these to update the value of the field.
-  let fieldApi;
-  let fieldState;
-  let fieldSchema;
-  $: unsubscribe = formField?.subscribe((value) => {
-    fieldState = value?.fieldState;
-    fieldApi = value?.fieldApi;
-    fieldSchema = value?.fieldSchema;
+  let fieldApi = $state();
+  let fieldState = $state();
+  let fieldSchema = $state();
+  $effect(() => {
+    const unsubscribe = formField?.subscribe((value) => {
+      fieldState = value?.fieldState;
+      fieldApi = value?.fieldApi;
+      fieldSchema = value?.fieldSchema;
+    });
+    return () => unsubscribe?.();
   });
   // We deregister the field when the component is destroyed.
   onDestroy(() => {
     fieldApi?.deregister();
-    unsubscribe?.();
   });
 
   let type = "string"; //We intend for this component to only be used for text fields.
 
-  $: schemaType =
-    fieldSchema?.type !== "formula" ? fieldSchema?.type : "string"; //This gets the type of the field from the fieldSchema. If the field is a formula, we set the type to string. Later on, this value is compared to 'type' above to check whether the component should be activated or not.
+  let schemaType = $derived(
+    fieldSchema?.type !== "formula" ? fieldSchema?.type : "string"
+  ); //This gets the type of the field from the fieldSchema. If the field is a formula, we set the type to string. Later on, this value is compared to 'type' above to check whether the component should be activated or not.
 
-  $: labelClass =
-    labelPos === "above" ? "" : `spectrum-FieldLabel--${labelPos}`; //Generate the corresponding CSS class for the label (in the HTML) based on the label position.
+  let labelClass = $derived(
+    labelPos === "above" ? "" : `spectrum-FieldLabel--${labelPos}`
+  ); //Generate the corresponding CSS class for the label (in the HTML) based on the label position.
 
   let buttonID = Math.random().toString(16); //Generate a random ID for the button. This is used to link the button to the file input (see HTML).
 
-  let files = []; //List of files items each structured in the following format:
-  let selectedFileIdx = 0
-  $: selectedFile = files?.[selectedFileIdx] ?? null
-  $: fileCount = files?.length ?? 0
+  let files = $state([]); //List of files items each structured in the following format:
+  let selectedFileIdx = $state(0)
+  let selectedFile = $derived(files?.[selectedFileIdx] ?? null)
+  let fileCount = $derived(files?.length ?? 0)
   /*
   {
             name: fileName,
@@ -84,19 +85,21 @@
             link: linkToFile, //Data URL
           }
   */
-  let blobFiles = []; //List of file urls - in blobLink format - Only used if useBlobURL is true
-  let archivedFiles = []; //Stored copy of files object in case a process fails
+  let blobFiles = $state([]); //List of file urls - in blobLink format - Only used if useBlobURL is true
+  let archivedFiles = $state([]); //Stored copy of files object in case a process fails
 
-  let browseFiles = []; //Files that are selected to be uploaded - linked to the file input (see HTML)
+  let browseFiles = $state([]); //Files that are selected to be uploaded - linked to the file input (see HTML)
 
   //Calls syncFilesWithField() if there are files selected in the file input.
-  $: if (browseFiles.length > 0) {
-    syncFilesWithField();
-  }
+  $effect(() => {
+    if (browseFiles.length > 0) {
+      syncFilesWithField();
+    }
+  });
 
   //Takes files selected in the file input, converts them into dataURLs (and blobURLs depending on settings), and then adds these dataURLs alongside their metadata into files.
   //Finally, the files array is converted to a JSON string and stored in the field.
-  //This function is called everytime there are items in the browseFiles array (files selected). See the reactive if statement above.
+  //This function is called everytime there are items in the browseFiles array (files selected). See the effect above.
   //This method ensures that the files array is updated with selected files and always in sync with the field.
   let syncFilesWithField = () => {
     //Check if adding selected files will breach file length restriction.
@@ -267,7 +270,7 @@
   let deleteButtonClick = (index) => {
     // Remove the file from the files array.
     files = [...files.slice(0, index), ...files.slice(index + 1)];
-    
+
     // Remove the blobURL from the blobFiles array if it is being used.
     if (useBlobURL) {
       blobFiles = [...blobFiles.slice(0, index), ...blobFiles.slice(index + 1)];
@@ -350,7 +353,7 @@
   {#if !formContext}
     <div class="placeholder">Form components need to be wrapped in a form</div>
   {:else if !fieldState}
-    <div class="placeholder" />
+    <div class="placeholder"></div>
   {:else if schemaType && schemaType !== type}
     <div class="placeholder">
       This Field setting is the wrong data type for this component
@@ -376,16 +379,16 @@
         type="button"
         value="Browse..."
         class="browse-button"
-        on:click={() => document.getElementById(buttonID).click()}
+        onclick={() => document.getElementById(buttonID).click()}
         disabled={fieldState.disabled}
       />
       {#if selectedFile}
         <div class="gallery">
           <div class="title">
             <div class="filename">
-              <button 
+              <button
                 class="spectrum-Link"
-                on:click={() => onLinkClick(selectedFileIdx)}
+                onclick={() => onLinkClick(selectedFileIdx)}
               >
                 {selectedFile.name}
             </button>
@@ -398,9 +401,9 @@
                   {`${(selectedFile.size / 1000000).toFixed(1)} MB`}
                 {/if}
               </div>
-              <div 
-                class="delete-button" 
-                on:click={() => deleteButtonClick(selectedFileIdx)}
+              <div
+                class="delete-button"
+                onclick={() => deleteButtonClick(selectedFileIdx)}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18"><defs><style>.fill {fill: #464646;}</style></defs><title>S Delete 18 N</title><rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="fill" d="M15.75,3H12V2a1,1,0,0,0-1-1H6A1,1,0,0,0,5,2V3H1.25A.25.25,0,0,0,1,3.25v.5A.25.25,0,0,0,1.25,4h1L3.4565,16.55a.5.5,0,0,0,.5.45H13.046a.5.5,0,0,0,.5-.45L14.75,4h1A.25.25,0,0,0,16,3.75v-.5A.25.25,0,0,0,15.75,3ZM5.5325,14.5a.5.5,0,0,1-.53245-.46529L5,14.034l-.5355-8a.50112.50112,0,0,1,1-.067l.5355,8a.5.5,0,0,1-.46486.53283ZM9,14a.5.5,0,0,1-1,0V6A.5.5,0,0,1,9,6ZM11,3H6V2h5Zm1,11.034a.50112.50112,0,0,1-1-.067l.5355-8a.50112.50112,0,1,1,1,.067Z" />
                 </svg>
@@ -420,14 +423,14 @@
           <div
           class="nav left"
             class:visible={selectedFileIdx > 0}
-            on:click={navigateLeft}
+            onclick={navigateLeft}
           >
           <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18"><defs><style>.fill {fill: #464646;}</style></defs><title>S ChevronLeft 18 N</title><rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="fill" d="M6,9a.994.994,0,0,0,.2925.7045l3.9915,3.99a1,1,0,1,0,1.4355-1.386l-.0245-.0245L8.4095,9l3.286-3.285A1,1,0,0,0,10.309,4.28l-.0245.0245L6.293,8.2945A.994.994,0,0,0,6,9Z" /></svg>
           </div>
           <div
             class="nav right"
             class:visible={selectedFileIdx < fileCount - 1}
-            on:click={navigateRight}
+            onclick={navigateRight}
           >
           <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 18 18" width="18"><defs><style>.fill {fill: #464646;}</style></defs><title>S ChevronRight 18 N</title><rect id="Canvas" fill="#ff13dc" opacity="0" width="18" height="18" /><path class="fill" d="M12,9a.994.994,0,0,1-.2925.7045l-3.9915,3.99a1,1,0,1,1-1.4355-1.386l.0245-.0245L9.5905,9,6.3045,5.715A1,1,0,0,1,7.691,4.28l.0245.0245,3.9915,3.99A.994.994,0,0,1,12,9Z" /></svg>
           </div>
